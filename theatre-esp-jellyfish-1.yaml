@@ -1,0 +1,128 @@
+
+substitutions:
+  device_name: theatre-esp-jellyfish-1
+  friendly_name: Spongebob Jelly 1
+
+esphome:
+  name: ${device_name}
+  libraries:
+    - SPI
+    - ESP8266WiFi
+    - forkineye/ESPAsyncE131@^1.0.4
+  on_boot:
+    then:
+    - light.turn_on:
+        id: motor
+        brightness: 0.5
+      
+#external_components:
+#  - source: github://esphome/esphome@2023.5.5
+#    components: e131
+
+esp8266:
+  board: nodemcuv2
+
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "KWK3N1EQ1LRqisawkKgM0e41tF3hYhJG8+Z0kio9Zs8="
+  reboot_timeout: 0s
+
+ota:
+  password: "c23dfa679f6cd4aaba8aeaf8a7af0343"
+
+wifi:
+  networks:
+  - ssid: !secret home_home_ssid
+    password: !secret home_home_password
+  - ssid: !secret vivo_staff_ssid
+    password: !secret vivo_staff_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "${device_name}"
+    password: !secret fallback_hotspot_password
+
+# Enable Web server
+web_server:
+  port: 80
+
+captive_portal:
+
+e131:
+  method: multicast
+
+# Example configuration entry
+light:
+  - platform: neopixelbus
+    id: jellyfish_leds
+    type: GRB
+    variant: WS2812
+    pin: RX
+    num_leds: 16
+    name: "NeoPixel light"
+  - platform: monochromatic
+    name: "Motor control"
+    id: motor
+    internal: false
+    output: motor_template
+    gamma_correct: 1
+    default_transition_length: 1s
+
+output:
+  - platform: esp8266_pwm
+    pin: D8
+    frequency: 60.3 Hz
+    id: motor_pwm_output
+  - platform: template
+    id: motor_template
+    type: float
+    write_action:
+    - output.set_level:
+        id: motor_pwm_output
+        level: !lambda |-
+          float set_speed = (state-0.5)*2;
+          float new_value = (set_speed * id(motor_pwm_range).state) + id(motor_pwm_offset).state;
+          //ESP_LOGI("custom", "Setting PWM motor speed to %f (set speed %f)", new_value, set_speed);
+          return new_value / 2550;
+
+number:
+  - platform: template
+    name: "Motor PWM range value (the extent of the motor speed value)"
+    id: motor_pwm_range
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+    min_value: 0
+    max_value: 300 #max 2550
+    step: 1
+  - platform: template
+    name: "Motor PWM offset value (at this value motor does not turn)"
+    id: motor_pwm_offset
+    optimistic: true
+    restore_value: true
+    initial_value: 190
+    min_value: 0
+    max_value: 300 #max 2550
+    step: 1
+
+sensor:
+  - platform: adc
+    pin: VCC
+    id: "VCC"
+    internal: true
+
+button:
+  - platform: restart
+    name: "Reset"
+
+sacn:
+  id: jelly_sacn
+  universe: 1
+  start_address: 1
+  rgb_id: jellyfish_leds
+  rgb_num_leds: 16
+  motor_id: motor
